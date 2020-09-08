@@ -28,8 +28,8 @@
 - name: apply post-master-up hooks
   changed_when: "'created' in post_master_up.stdout or 'configured' in post_master_up.stdout"
   local_action:
-    module: 'command kubectl --kubeconfig=build/k8s-config.yaml apply --filename=hooks/{{ item }}.yaml'
-    removes: 'hooks/{{ item }}.yaml' # it doesn't, but it prevents this step from running if it is
+    module: "command kubectl --kubeconfig=build/k8s-config.yaml apply --filename=hooks/{{ item }}.yaml"
+    removes: "hooks/{{ item }}.yaml" # it doesn't, but it prevents this step from running if it is
   register: post_master_up
   vars:
     ansible_become: no
@@ -47,11 +47,14 @@
   ignore_errors: true
 - name: Create k8s dashboard service account
   shell: kubectl --kubeconfig=/etc/kubernetes/admin.conf create serviceaccount dashboard-admin-sa
+  ignore_errors: true
 - name: Bind service account to admin cluster role
-  shell: kubectl create clusterrolebinding dashboard-admin-sa --clusterrole=cluster-admin --serviceaccount=default:dashboard-admin-sa
+  shell: kubectl --kubeconfig=/etc/kubernetes/admin.conf create clusterrolebinding dashboard-admin-sa --clusterrole=cluster-admin --serviceaccount=default:dashboard-admin-sa
+  ignore_errors: true
 - name: Echo token
-  shell: dashboard-admin-sa-token=$(kubectl get secret dashboard-admin-sa-token -o jsonpath="{.data.<DATA>}" | base64 --decode)
+  shell: 'kubectl --kubeconfig=/etc/kubernetes/admin.conf  get secrets | grep dashboard | tr " " "\n" | {read secret; echo ${secret[@]:0:31} } | {read token; kubectl --kubeconfig=/etc/kubernetes/admin.conf describe secret $token;}'
+  ignore_errors: true
 - debug:
-    msg: "Auth token for the dashboard is: {{dashboard-admin-sa-token}}"
+    msg: "Auth token for the dashboard is {{ lookup('env','dashboard-admin-sa-token') }}"
 - name: Delete flannel 1 ip link # just for fixing the kube-flannel-ds-arm pod
   shell: ip link delete flannel.1
