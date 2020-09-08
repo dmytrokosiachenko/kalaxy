@@ -1,6 +1,8 @@
 ---
 - name: kubeadm init
   command: "kubeadm init --apiserver-advertise-address={{ ansible_default_ipv4.address }} --pod-network-cidr=10.244.0.0/16"
+  retries: 2
+  delay: 2
   args:
     creates: /etc/kubernetes/kubelet.conf
 - name: fetch k8s config
@@ -34,3 +36,22 @@
   with_items:
     - k8s-post-master-up
     - post-master-up
+- name: Deploy kubernetes dashboard into cluster
+  command: |
+    kubectl --kubeconfig=/etc/kubernetes/admin.conf \
+        apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.0.0/aio/deploy/recommended.yaml
+  register: create_result
+  until: create_result.rc == 0
+  retries: 2
+  delay: 2
+  ignore_errors: true
+- name: Create k8s dashboard service account
+  shell: kubectl --kubeconfig=/etc/kubernetes/admin.conf create serviceaccount dashboard-admin-sa
+- name: Bind service account to admin cluster role
+  shell: kubectl create clusterrolebinding dashboard-admin-sa --clusterrole=cluster-admin --serviceaccount=default:dashboard-admin-sa
+- name: Echo token
+  shell: dashboard-admin-sa-token=$(kubectl get secret dashboard-admin-sa-token -o jsonpath="{.data.<DATA>}" | base64 --decode)
+- debug:
+    msg: "Auth token for the dashboard is: {{dashboard-admin-sa-token}}"
+- name: Delete flannel 1 ip link # just for fixing the kube-flannel-ds-arm pod
+  shell: ip link delete flannel.1
