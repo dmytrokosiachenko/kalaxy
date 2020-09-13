@@ -51,10 +51,14 @@
 - name: Bind service account to admin cluster role
   shell: kubectl --kubeconfig=/etc/kubernetes/admin.conf create clusterrolebinding dashboard-admin-sa --clusterrole=cluster-admin --serviceaccount=default:dashboard-admin-sa
   ignore_errors: true
-- name: Echo token
-  shell: 'kubectl --kubeconfig=/etc/kubernetes/admin.conf  get secrets | grep dashboard | tr " " "\n" | {read secret; echo ${secret[@]:0:31} } | {read token; kubectl --kubeconfig=/etc/kubernetes/admin.conf describe secret $token;}'
+- name: Save k8s-dashboard access token to variable
+  shell: | 
+  sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf get secrets | grep -P -o  \'(dashboard)-(admin)-(sa)-(token)([a-z-0-9]){6}' | read token ; \ 
+        sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf get secret \"$token\" --template={{'{{'}}.data.token{{'}}'}} | base64 --decode
+  register: dashboard_admin_sa_token
   ignore_errors: true
 - debug:
-    msg: "Auth token for the dashboard is {{ lookup('env','dashboard-admin-sa-token') }}"
+    var: dashboard_admin_sa_token
 - name: Delete flannel 1 ip link # just for fixing the kube-flannel-ds-arm pod
   shell: ip link delete flannel.1
+  ignore_errors: true
