@@ -51,10 +51,8 @@
 - name: Bind service account to admin cluster role
   shell: kubectl --kubeconfig=/etc/kubernetes/admin.conf create clusterrolebinding dashboard-admin-sa --clusterrole=cluster-admin --serviceaccount=default:dashboard-admin-sa
   ignore_errors: true
-- name: Save k8s-dashboard access token to variable
-  shell: | 
-  sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf get secrets | grep -P -o  \'(dashboard)-(admin)-(sa)-(token)([a-z-0-9]){6}' | read token ; \ 
-        sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf get secret \"$token\" --template={{'{{'}}.data.token{{'}}'}} | base64 --decode
+- name: Echo k8s secrets
+  shell: sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf describe secrets|grep -P -o  '(token:(.*))'
   register: dashboard_admin_sa_token
   ignore_errors: true
 - debug:
@@ -62,3 +60,23 @@
 - name: Delete flannel 1 ip link # just for fixing the kube-flannel-ds-arm pod
   shell: ip link delete flannel.1
   ignore_errors: true
+- name: install pip3
+  apt:
+    name: 
+    - python3-pip
+- name: install dependencies for helm
+  command: pip3 install PyYAML
+- name: Install helm
+  shell:  curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 && \
+          chmod 700 get_helm.sh && \
+          ./get_helm.sh
+- name: Add ecommerce helm repo
+  community.kubernetes.helm_repository:
+    name: stable
+    repo_url: "https://charts.bitnami.com/bitnami"
+- name: Deploy latest version of ecommerce chart inside k8s cluster
+  community.kubernetes.helm:
+    name: opencart
+    chart_ref: bitnami/opencart
+    release_namespace: default
+    kubeconfig: /etc/kubernetes/admin.conf
